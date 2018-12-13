@@ -49,6 +49,7 @@ http://www.manythings.org/anki/
     https://arxiv.org/abs/1406.1078
 '''
 from __future__ import print_function
+import string
 
 from keras.models import Model
 from keras.layers import Input, LSTM, Dense
@@ -57,7 +58,7 @@ import numpy as np
 batch_size = 64  # Batch size for training.
 epochs = 100  # Number of epochs to train for.
 latent_dim = 256  # Latent dimensionality of the encoding space.
-num_samples = 10000  # Number of samples to train on.
+num_samples = 1000  # Number of samples to train on.
 # Path to the data txt file on disk.
 data_path = 'swe-eng/swe.txt'
 
@@ -70,9 +71,16 @@ with open(data_path, 'r', encoding='utf-8') as f:
     lines = f.read().split('\n')
 for line in lines[: min(num_samples, len(lines) - 1)]:
     input_text, target_text = line.split('\t')
+
+    # translator for removing punctuation
+    translator = str.maketrans('', '', string.punctuation)
+
+    # read wordbased instead of charbased and make all words lowercase without punktuation
+    input_text = input_text.lower().translate(translator).split(' ')
+    target_text = target_text.lower().translate(translator).split(' ')
     # We use "tab" as the "start sequence" character
     # for the targets, and "\n" as "end sequence" character.
-    target_text = '\t' + target_text + '\n'
+    target_text = ['\t'] + target_text + ['\n']
     input_texts.append(input_text)
     target_texts.append(target_text)
     for char in input_text:
@@ -194,7 +202,7 @@ def decode_sequence(input_seq):
     # Sampling loop for a batch of sequences
     # (to simplify, here we assume a batch of size 1).
     stop_condition = False
-    decoded_sentence = ''
+    decoded_sentence = []
     while not stop_condition:
         output_tokens, h, c = decoder_model.predict(
             [target_seq] + states_value)
@@ -202,12 +210,11 @@ def decode_sequence(input_seq):
         # Sample a token
         sampled_token_index = np.argmax(output_tokens[0, -1, :])
         sampled_char = reverse_target_char_index[sampled_token_index]
-        decoded_sentence += sampled_char
+        decoded_sentence.append(sampled_char)
 
         # Exit condition: either hit max length
         # or find stop character.
-        if (sampled_char == '\n' or
-           len(decoded_sentence) > max_decoder_seq_length):
+        if (len(decoded_sentence) > max_decoder_seq_length) or (sampled_char == '\n'):
             stop_condition = True
 
         # Update the target sequence (of length 1).
@@ -220,7 +227,7 @@ def decode_sequence(input_seq):
     return decoded_sentence
 
 
-for seq_index in range(100):
+for seq_index in range(10):
     # Take one sequence (part of the training set)
     # for trying out decoding.
     input_seq = encoder_input_data[seq_index: seq_index + 1]
